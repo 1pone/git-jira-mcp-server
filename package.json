@@ -1,12 +1,15 @@
 {
   "name": "git-jira-mcp-server",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A tool to fetch Jira ticket information based on current git branch",
   "main": "index.js",
   "type": "module",
   "files": [
     "dist"
   ],
+  "bin": {
+    "git-jira-mcp-server": "dist/index.js"
+  },
   "scripts": {
     "build": "tsc && chmod +x dist/*.js",
     "watch": "tsc --watch",
