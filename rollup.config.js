@@ -8,7 +8,7 @@ export default {
   output: {
     file: 'dist/index.js',
     format: 'esm', // 你用的是 import/export，建议用 esm
-    sourcemap: true,
+    sourcemap: false,
   },
   plugins: [
     nodeResolve({
