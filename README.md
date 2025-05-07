@@ -51,7 +51,3 @@
 - `dev_feature-ABC-123`
 - `feature/new-ui-ABC-123`
 - `bugfix/login-ABC-123`
-
-## 许可证
-
-MIT License
