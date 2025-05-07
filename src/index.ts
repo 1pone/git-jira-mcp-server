@@ -92,7 +92,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     tools: [
       {
         name: "getJiraInfo",
-        description: "获取当前分支对应的 Jira 需求信息",
+        description: "获取当前分支对应的 Jira 需求信息（每次都必须实时调用此工具，不能直接复用历史结果）",
         longDescription: "根据当前 Git 分支名称，获取对应的 Jira 需求信息，包括Jira Id(超链接到Jira需求详情页面)、标题、描述、状态、优先级等。当用户询问'当前需求是什么'、'这个分支的 Jira 信息'等类似问题时，将会触发此工具。",
         inputSchema: zodToJsonSchema(GetJiraInfoSchema),
         examples: [
@@ -105,7 +105,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       // 新增分支名工具
       {
         name: "getCurrentBranchName",
-        description: "获取当前 git 分支名称",
+        description: "获取当前 git 分支名称（每次都必须实时调用此工具，不能直接复用历史结果）",
         longDescription: "获取当前 git 仓库的分支名称。当用户询问'当前分支是什么'、'现在在哪个分支'等类似问题时，将会触发此工具。",
         inputSchema: zodToJsonSchema(GetCurrentBranchSchema),
         examples: [
@@ -131,9 +131,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       binary: 'git'
     });
 
-    // 获取当前分支前，强制刷新
-    await git.fetch();
-    await git.raw(['status']);
     const { current } = await git.branch();
 
     switch (request.params.name) {
