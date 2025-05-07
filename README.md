@@ -63,12 +63,16 @@ npm run watch
 
 ### 在 Cursor IDE 中使用
 
+> [获取 Jira API Token](https://id.atlassian.com/manage-profile/security/api-tokens)
+
 ```json
 {
-  "jira": {
-      "command": "node",
-      "type": "stdio",
-      "args": ["path/to/dist/index.js"],
+  "git-jira": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "git-jira-mcp-server"
+      ],
       "env": {
         "JIRA_INSTANCE_URL": "https://your-domain.atlassian.net",
         "JIRA_USER_EMAIL": "your.email@example.com",
