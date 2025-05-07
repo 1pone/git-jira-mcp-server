@@ -1,6 +1,6 @@
 {
   "name": "git-jira-mcp-server",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "description": "A tool to fetch Jira ticket information based on current git branch",
   "repository": {
     "type": "git",

@@ -131,6 +131,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       binary: 'git'
     });
 
+    // 获取当前分支前，强制刷新
+    await git.fetch();
+    await git.raw(['status']);
+    const { current } = await git.branch();
+
     switch (request.params.name) {
       case "getJiraInfo": {
         const args = GetJiraInfoSchema.parse(request.params.arguments);
@@ -151,7 +156,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
 
           // 获取当前分支
-          const { current } = await git.branch();
           console.error('[DEBUG] Current branch:', current);
           
           // 提取 Jira ID
@@ -161,7 +165,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           if (!jiraId) {
             const response: JiraInfoResponse = {
               success: false,
-              message: '无法从分支名中提取 Jira ID'
+              message: `无法从分支名 ${current} 中提取 Jira ID`
             };
             return {
               content: [{ 
@@ -222,7 +226,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
       }
 
-      // 新增分支名工具处理
+      // 获取分支名工具处理
       case "getCurrentBranchName": {
         const args = GetCurrentBranchSchema.parse(request.params.arguments);
         // 初始化 Git
