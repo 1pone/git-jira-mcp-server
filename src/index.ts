@@ -81,6 +81,11 @@ const GetJiraInfoSchema = z.object({
   random_string: z.string().optional().describe('Dummy parameter for no-parameter tools')
 });
 
+// 新增：定义获取分支名工具的 schema
+const GetCurrentBranchSchema = z.object({
+  random_string: z.string().optional().describe('Dummy parameter for no-parameter tools')
+});
+
 // 注册工具列表
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
@@ -95,6 +100,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           "这个分支对应的 Jira 信息",
           "显示 Jira 需求详情",
           "查看当前任务"
+        ]
+      },
+      // 新增分支名工具
+      {
+        name: "getCurrentBranchName",
+        description: "获取当前 git 分支名称",
+        longDescription: "获取当前 git 仓库的分支名称。当用户询问'当前分支是什么'、'现在在哪个分支'等类似问题时，将会触发此工具。",
+        inputSchema: zodToJsonSchema(GetCurrentBranchSchema),
+        examples: [
+          "当前分支是什么",
+          "现在在哪个分支",
+          "显示当前分支名"
         ]
       }
     ],
@@ -203,6 +220,40 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
           throw error;
         }
+      }
+
+      // 新增分支名工具处理
+      case "getCurrentBranchName": {
+        const args = GetCurrentBranchSchema.parse(request.params.arguments);
+        // 初始化 Git
+        const git = simpleGit({
+          baseDir: process.env.WORKSPACE_FOLDER_PATHS,
+          binary: 'git'
+        });
+        // 检查是否是 Git 仓库
+        const isRepo = await git.checkIsRepo();
+        if (!isRepo) {
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                success: false,
+                message: '当前目录不是 Git 仓库'
+              }, null, 2)
+            }],
+          };
+        }
+        // 获取当前分支
+        const { current } = await git.branch();
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              success: true,
+              branch: current
+            }, null, 2)
+          }],
+        };
       }
 
       default:
