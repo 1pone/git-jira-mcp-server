@@ -1,7 +1,20 @@
 {
   "name": "git-jira-mcp-server",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "A tool to fetch Jira ticket information based on current git branch",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/1pone/git-jira-mcp-server.git"
+  },
+  "author": "1pone",
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "jira",
+    "git",
+    "branch",
+    "mcp-server"
+  ],
   "main": "dist/index.js",
   "type": "module",
   "files": [
