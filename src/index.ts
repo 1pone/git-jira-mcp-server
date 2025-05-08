@@ -10,6 +10,7 @@ import {
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { JiraIssueSchema, JiraInfoResponseSchema, JiraIssue, JiraInfoResponse } from './types.js';
+import { extractJiraId, getJiraTicket } from './jira.js';
 
 // Jira API 配置
 const JIRA_EMAIL = process.env.JIRA_USER_EMAIL as string;
@@ -18,49 +19,6 @@ const JIRA_INSTANCE_URL = process.env.JIRA_INSTANCE_URL as string;
 
 if (!JIRA_EMAIL || !JIRA_API_TOKEN || !JIRA_INSTANCE_URL) {
   throw new Error('Missing required environment variables');
-}
-
-// 从分支名中提取 Jira ID
-function extractJiraId(branchName: string): string | null {
-    const patterns = process.env.JIRA_BRANCH_PATTERNS?.split(',') || [
-        /dev_[a-zA-Z]+-([A-Z]+-\d+)/,
-        /feature\/[a-zA-Z]+-([A-Z]+-\d+)/,
-        /bugfix\/[a-zA-Z]+-([A-Z]+-\d+)/,
-        /dev_[a-zA-Z]+_([A-Z]+-\d+)/
-    ];
-
-    for (const pattern of patterns) {
-        const match = branchName.match(pattern);
-        if (match) {
-            return match[1];
-        }
-    }
-    return null;
-}
-
-// 获取 Jira 需求详情
-async function getJiraTicket(jiraId: string): Promise<JiraIssue | null> {
-    try {
-        const response = await axios.get(
-            `${JIRA_INSTANCE_URL}/rest/api/3/issue/${jiraId}`,
-            {
-                auth: {
-                    username: JIRA_EMAIL,
-                    password: JIRA_API_TOKEN
-                }
-            }
-        );
-        return JiraIssueSchema.parse(response.data);
-    } catch (error) {
-        if (error instanceof z.ZodError) {
-            console.error('Jira API 响应格式错误:', error.errors);
-        } else if (axios.isAxiosError(error) && error.response) {
-            console.error('Jira API 请求失败:', error.response.status, error.response.data);
-        } else {
-            console.error('获取 Jira 需求失败:', error instanceof Error ? error.message : String(error));
-        }
-        return null;
-    }
 }
 
 // 创建 MCP 服务器
@@ -84,6 +42,11 @@ const GetJiraInfoSchema = z.object({
 // 新增：定义获取分支名工具的 schema
 const GetCurrentBranchSchema = z.object({
   random_string: z.string().optional().describe('Dummy parameter for no-parameter tools')
+});
+
+// 新增：定义通过 Jira ID 查询需求的工具 schema
+const GetJiraByIdSchema = z.object({
+  jiraId: z.string().describe('Jira 需求的 ID，如 ABC-123')
 });
 
 // 注册工具列表
@@ -112,6 +75,18 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           "当前分支是什么",
           "现在在哪个分支",
           "显示当前分支名"
+        ]
+      },
+      // 新增：通过 Jira ID 查询需求信息
+      {
+        name: "getJiraById",
+        description: "通过 Jira ID 查询需求信息（每次都必须实时调用此工具，不能直接复用历史结果）",
+        longDescription: "根据用户输入的 Jira ID，获取对应的 Jira 需求信息，包括Jira Id(超链接到Jira需求详情页面)、标题、描述、状态、优先级等。当用户询问'查一下 ABC-123 的需求'等类似问题时，将会触发此工具。",
+        inputSchema: zodToJsonSchema(GetJiraByIdSchema),
+        examples: [
+          "查一下 ABC-123 的需求",
+          "Jira 任务 DEF-456 的详情",
+          "显示 Jira 需求 GHI-789 的信息"
         ]
       }
     ],
@@ -253,6 +228,49 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               success: true,
               branch: current
             }, null, 2)
+          }],
+        };
+      }
+
+      // 新增：通过 Jira ID 查询需求信息
+      case "getJiraById": {
+        const args = GetJiraByIdSchema.parse(request.params.arguments);
+        const jiraId = args.jiraId;
+        // 获取需求详情
+        const ticket = await getJiraTicket(jiraId);
+        if (!ticket) {
+          const response: JiraInfoResponse = {
+            success: false,
+            message: '获取 Jira 需求失败'
+          };
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify(response, null, 2)
+            }],
+          };
+        }
+        // 返回需求信息
+        const jiraUrl = `${JIRA_INSTANCE_URL}/browse/${jiraId}`;
+        const markdownLink = `[${jiraId}](${jiraUrl})`;
+        const response: JiraInfoResponse = {
+          success: true,
+          data: {
+            branch: '', // 通过ID查询时无分支
+            url: jiraUrl,
+            markdownLink: markdownLink,
+            summary: ticket.fields.summary,
+            description: ticket.fields.description,
+            status: ticket.fields.status.name,
+            priority: ticket.fields.priority.name,
+            assignee: ticket.fields.assignee?.displayName || '未分配',
+          }
+        };
+        JiraInfoResponseSchema.parse(response);
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify(response, null, 2)
           }],
         };
       }
