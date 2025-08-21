@@ -25,7 +25,7 @@ if (!JIRA_EMAIL || !JIRA_API_TOKEN || !JIRA_INSTANCE_URL) {
 const server = new Server(
   {
     name: "jira-scp",
-    version: "1.0.0",
+    version: "1.0.15",
   },
   {
     capabilities: {
@@ -93,6 +93,32 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   };
 });
 
+// 获取工作目录的辅助函数
+function getWorkingDirectory(): string {
+  // 优先级：WORKSPACE_FOLDER_PATHS (VSCode) > PWD (当前目录) > process.cwd()
+  const workspaceDir = process.env.WORKSPACE_FOLDER_PATHS;
+  const currentDir = process.env.PWD;
+  const processDir = process.cwd();
+  
+  console.error('[DEBUG] Environment check:');
+  console.error('  WORKSPACE_FOLDER_PATHS:', workspaceDir || 'undefined');
+  console.error('  PWD:', currentDir || 'undefined');
+  console.error('  process.cwd():', processDir);
+  
+  return workspaceDir || currentDir || processDir;
+}
+
+// 初始化Git实例的辅助函数
+function createGitInstance(): any {
+  const baseDir = getWorkingDirectory();
+  console.error('[DEBUG] Using baseDir:', baseDir);
+  
+  return simpleGit({
+    baseDir: baseDir,
+    binary: 'git'
+  });
+}
+
 // 处理工具调用
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
@@ -100,19 +126,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       throw new Error("Arguments are required");
     }
 
-    // 初始化 Git
-    const git = simpleGit({
-      baseDir: process.env.WORKSPACE_FOLDER_PATHS,
-      binary: 'git'
-    });
-
-    const { current } = await git.branch();
-
     switch (request.params.name) {
       case "getJiraInfo": {
         const args = GetJiraInfoSchema.parse(request.params.arguments);
         
         try {
+          // 初始化Git实例
+          const git = createGitInstance();
+          
           // 检查是否是 Git 仓库
           const isRepo = await git.checkIsRepo();
           if (!isRepo) {
@@ -128,6 +149,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
 
           // 获取当前分支
+          const { current } = await git.branch();
           console.error('[DEBUG] Current branch:', current);
           
           // 提取 Jira ID
@@ -201,35 +223,51 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // 获取分支名工具处理
       case "getCurrentBranchName": {
         const args = GetCurrentBranchSchema.parse(request.params.arguments);
-        // 初始化 Git
-        const git = simpleGit({
-          baseDir: process.env.WORKSPACE_FOLDER_PATHS,
-          binary: 'git'
-        });
-        // 检查是否是 Git 仓库
-        const isRepo = await git.checkIsRepo();
-        if (!isRepo) {
+        
+        try {
+          // 初始化Git实例
+          const git = createGitInstance();
+          
+          // 检查是否是 Git 仓库
+          const isRepo = await git.checkIsRepo();
+          if (!isRepo) {
+            const baseDir = getWorkingDirectory();
+            return {
+              content: [{
+                type: "text",
+                text: JSON.stringify({
+                  success: false,
+                  message: `目录 ${baseDir} 不是 Git 仓库`
+                }, null, 2)
+              }],
+            };
+          }
+          
+          // 获取当前分支
+          const { current } = await git.branch();
+          console.error('[DEBUG] getCurrentBranchName - Current branch:', current);
+          
+          return {
+            content: [{
+              type: "text",
+              text: JSON.stringify({
+                success: true,
+                branch: current
+              }, null, 2)
+            }],
+          };
+        } catch (error) {
+          console.error('[ERROR] getCurrentBranchName failed:', error);
           return {
             content: [{
               type: "text",
               text: JSON.stringify({
                 success: false,
-                message: '当前目录不是 Git 仓库'
+                message: `获取分支信息失败: ${error instanceof Error ? error.message : String(error)}`
               }, null, 2)
             }],
           };
         }
-        // 获取当前分支
-        const { current } = await git.branch();
-        return {
-          content: [{
-            type: "text",
-            text: JSON.stringify({
-              success: true,
-              branch: current
-            }, null, 2)
-          }],
-        };
       }
 
       // 新增：通过 Jira ID 查询需求信息
